@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>עוגה אינטראקטיבית - תיקון הצמדת גלים</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+        
+        .main-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* הקונטיינר הזה תמיד יהיה בדיוק בגודל של הווידאו המוצג */
+        .video-constrain {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* מבטיח שהקונטיינר לא יהיה גדול מהמסך או מהווידאו */
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        video {
+            display: block;
+            max-width: 100vw;
+            max-height: 100vh;
+            object-fit: contain; /* שומר על יחס הסרטון המקורי */
+        }
+
+        /* נגן ה-Swap והשכבות */
+        .video-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; visibility: hidden; object-fit: contain; }
+        .visible { visibility: visible; z-index: 2; }
+        .hidden { visibility: hidden; z-index: 1; }
+
+        #static-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: contain;
+            display: none;
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        /* הגל מוצמד לתחתית הקונטיינר של הווידאו */
+        .wave-wrapper {
+            position: absolute;
+            bottom: 0; /* נצמד לתחתית הווידאו ממש */
+            left: 0;
+            width: 100%;
+            height: 15%; /* גובה יחסי לסרטון */
+            max-height: 100px;
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        .waves { width: 100%; height: 100%; }
+
+        /* אטימות מוגברת וצבע */
+        .parallax > use { animation: move-forever 25s cubic-bezier(.55,.5,.45,.5) infinite; }
+        .parallax > use:nth-child(1) { fill: rgba(182, 75, 140, 0.8); animation-delay: -2s; animation-duration: 7s; }
+        .parallax > use:nth-child(2) { fill: rgba(182, 75, 140, 0.85); animation-delay: -3s; animation-duration: 10s; }
+        .parallax > use:nth-child(3) { fill: rgba(182, 75, 140, 0.9); animation-delay: -4s; animation-duration: 13s; }
+        .parallax > use:nth-child(4) { fill: #b64b8c; animation-delay: -5s; animation-duration: 20s; }
+
+        @keyframes move-forever {
+            0% { transform: translate3d(-90px,0,0); }
+            100% { transform: translate3d(85px,0,0); }
+        }
+
+        .hotspots-container {
+            position: absolute;
+            top: 32%; bottom: 15%; left: 0; right: 0;
+            display: flex; flex-direction: column; z-index: 20;
+        }
+        .tier-btn { width: 100%; cursor: pointer; }
+        .tier-5 { flex: 1.2; } .tier-4 { flex: 1; } .tier-3 { flex: 1.1; } .tier-2 { flex: 1.2; } .tier-1 { flex: 1.8; }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <div class="video-constrain" id="stage">
+        
+        <video id="video-a" class="video-layer visible" autoplay muted playsinline src="base_cake.mp4"></video>
+        <video id="video-b" class="video-layer hidden" muted playsinline></video>
+        
+        <img src="tier1_static.png" style="visibility: hidden; max-width: 100vw; max-height: 100vh; display: block;">
+
+        <img id="static-overlay" src="" onclick="closeTier()">
+
+        <div class="wave-wrapper">
+            <svg class="waves" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                <defs><path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" /></defs>
+                <g class="parallax">
+                    <use xlink:href="#gentle-wave" x="48" y="0" /><use xlink:href="#gentle-wave" x="48" y="3" />
+                    <use xlink:href="#gentle-wave" x="48" y="5" /><use xlink:href="#gentle-wave" x="48" y="7" />
+                </g>
+            </svg>
+        </div>
+
+        <div class="hotspots-container" id="hotspots">
+            <div class="tier-btn tier-5" onclick="handleTierClick(5)"></div>
+            <div class="tier-btn tier-4" onclick="handleTierClick(4)"></div>
+            <div class="tier-btn tier-3" onclick="handleTierClick(3)"></div>
+            <div class="tier-btn tier-2" onclick="handleTierClick(2)"></div>
+            <div class="tier-btn tier-1" onclick="handleTierClick(1)"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const pA = document.getElementById('video-a');
+    const pB = document.getElementById('video-b');
+    const overlay = document.getElementById('static-overlay');
+    const hotspots = document.getElementById('hotspots');
+
+    let cur = pA;
+    let nxt = pB;
+    let currentTier = null;
+
+    cur.loop = true;
+
+    function swap() {
+        return new Promise((resolve) => {
+            nxt.play().then(() => {
+                cur.classList.replace('visible', 'hidden');
+                nxt.classList.replace('hidden', 'visible');
+                cur.pause();
+                [cur, nxt] = [nxt, cur];
+                resolve();
+            });
+        });
+    }
+
+    async function handleTierClick(tierNum) {
+        currentTier = tierNum;
+        hotspots.style.pointerEvents = 'none';
+        cur.playbackRate = 3.0;
+        cur.loop = false;
+
+        cur.onended = async () => {
+            nxt.src = `tier${tierNum}_drawer_open.mp4`;
+            await swap();
+            cur.onended = async () => {
+                nxt.src = `tier${tierNum}_card_out.mp4`;
+                await swap();
+                cur.onended = () => {
+                    overlay.src = `tier${tierNum}_static.png`;
+                    overlay.style.display = 'block';
+                    cur.onended = null;
+                };
+            };
+        };
+    }
+
+    async function closeTier() {
+        overlay.style.display = 'none';
+        nxt.src = `tier${currentTier}_card_in.mp4`;
+        await swap();
+        cur.onended = async () => {
+            nxt.src = `tier${currentTier}_drawer_close.mp4`;
+            await swap();
+            cur.onended = async () => {
+                nxt.src = 'base_cake.mp4';
+                await swap();
+                cur.loop = true;
+                cur.playbackRate = 1.0;
+                hotspots.style.pointerEvents = 'auto';
+            };
+        };
+    }
+</script>
+</body>
+</html>
